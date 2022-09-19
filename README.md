@@ -1,1 +1,7 @@
-this project is a joke and the login system is very unsecure: do not use this code
+this project contains a very bad login system
+
+it is very insecure
+
+DO NOT USE THIS CODE
+
+THIS PROJECT IS FOR A JOKE

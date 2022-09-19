@@ -1,0 +1,8 @@
+name = "btn"
+compatibility_date = "2022-09-17"
+main = "src/index.ts"
+node_compat = true
+
+kv_namespaces = [
+  { binding = "users", id = "b766cd65a66640faa8c9439aeee91889" }
+]
