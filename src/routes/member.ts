@@ -1,5 +1,5 @@
-import { type RESTGetAPIUserResult } from 'discord-api-types/v10';
 import { type ENV } from '../@types/ENV';
+import { User } from '../@types/User';
 import { Route } from '../structures/Route';
 
 export class MemberRoute extends Route {
@@ -8,63 +8,89 @@ export class MemberRoute extends Route {
     }
 
     public async post(request: Request, baseHeaders: HeadersInit) {
-        const { searchParams } = new URL(request.url);
+        const authorization = request.headers.get('Authorization');
 
-        const accessToken = searchParams.get('access_token');
-        const tokenType = searchParams.get('token_type');
+        const fragments = authorization?.split(' ') ?? [];
 
-        if (accessToken === null || tokenType === null) {
+        if (fragments[0] !== 'Basic' || fragments[1] !== this.env.BRIDGE_AUTHORIZATION) {
             return new Response(null, {
+                headers: baseHeaders,
+                status: 404,
+            });
+        }
+
+        const rawUser = await request.json() as Partial<User>;
+
+        const user = {
+            id: rawUser.id ?? null,
+            username: rawUser.username ?? null,
+            avatar: rawUser.avatar ?? null,
+            discriminator: rawUser.discriminator ?? null,
+            public_flags: rawUser.public_flags ?? null,
+            flags: rawUser.flags ?? null,
+            banner: rawUser.banner ?? null,
+            accent_color: rawUser.accent_color ?? null,
+        } as User;
+
+        if (
+            user.id === null
+            || user.username === null
+            || user.discriminator === null
+        ) {
+            return new Response('Missing id, username, or discriminator', {
                 headers: baseHeaders,
                 status: 400,
             });
         }
 
-        const userRequest = await fetch('https://discord.com/api/users/@me', {
-            headers: {
-                authorization: `${tokenType} ${accessToken}`,
-            },
-        });
+        const usersString = await this.env.users.get('users') as string;
 
-        if (userRequest.ok === false) {
+        const users = JSON.parse(usersString) as User[];
+
+        users.push(user);
+
+        users.sort(
+            (userA, userB) => userA.username.localeCompare(userB.username),
+        );
+
+        await this.env.users.put('users', JSON.stringify(users));
+
+        return new Response(null, {
+            headers: baseHeaders,
+            status: 200,
+        });
+    }
+
+    public async delete(request: Request, baseHeaders: HeadersInit) {
+        const authorization = request.headers.get('Authorization');
+
+        const fragments = authorization?.split(' ') ?? [];
+
+        if (fragments[0] !== 'Basic' || fragments[1] !== this.env.BRIDGE_AUTHORIZATION) {
             return new Response(null, {
                 headers: baseHeaders,
-                status: 418,
+                status: 404,
             });
         }
 
-        const rawUser = (await userRequest.json()) as RESTGetAPIUserResult;
+        const userId = await request.text();
 
-        const cleanUser = {
-            id: rawUser.id,
-            username: rawUser.username,
-            avatar: rawUser.avatar,
-            discriminator: rawUser.discriminator,
-            public_flags: rawUser.public_flags,
-            flags: rawUser.flags,
-            banner: rawUser.banner,
-            accent_color: rawUser.accent_color,
-        };
+        if (userId === null) {
+            return new Response('Missing userId', {
+                headers: baseHeaders,
+                status: 400,
+            });
+        }
 
-        const userName = `user-${cleanUser.id}`;
+        const usersString = await this.env.users.get('users') as string;
 
-        const userIds = await this.env.users.list({ prefix: 'user-' });
+        const users = JSON.parse(usersString) as User[];
 
-        await this.env.users.put(userName, JSON.stringify(cleanUser));
+        const index = users.findIndex((user) => user.id === userId);
 
-        const users = [
-            cleanUser,
-            ...(await Promise.all(
-                userIds.keys.map(async (key) => {
-                    if (key.name === userName) {
-                        return null;
-                    }
-
-                    const string = await this.env.users.get(key.name);
-                    return JSON.parse(string!) as RESTGetAPIUserResult | null;
-                }),
-            )),
-        ].filter((user) => user !== null).sort();
+        if (index >= 0) {
+            users.splice(index, 1);
+        }
 
         await this.env.users.put('users', JSON.stringify(users));
 
