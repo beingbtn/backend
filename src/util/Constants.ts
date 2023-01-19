@@ -6,7 +6,7 @@ export class Constants {
     );
 
     public static origins = [
-        'https://btn.attituding.live',
+        'https://btn.attituding.xyz',
         'https://btn.attituding.workers.dev',
         'http://localhost:3000',
     ];
